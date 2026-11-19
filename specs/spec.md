@@ -1,0 +1,7 @@
+Northbeam Docs Studio — Features
+1. Create and edit drafts: A trusted writer can enter a title, unique slug, Markdown body, and tags. Draft edits never change public content. Keep the slug fixed after creation.
+2. Publish safely: Each publish creates an immutable, numbered snapshot and makes it public. Snapshot creation, publication pointer, and status change must succeed or roll back together. Preserve the first publication date on every republish.
+3. Unpublish without losing history: Hide the article publicly while keeping its snapshots, last publication pointer, and original publication date.
+4. Manage version history: List snapshots newest first and inspect them. Restore copies content into the draft without publishing or changing history. The API rejects deletion of the referenced snapshot, including while unpublished; other snapshots may be deleted.
+5. Protect concurrent edits: Detect outdated saves, restores, and publishes using a revision number. Return a clear conflict instead of overwriting newer work, and preserve the writer's local text.
+6. Read published articles: Anonymous readers can list published titles, tags, and dates and read safely rendered Markdown from the live snapshot only. Draft-only, unpublished, and missing articles return 404. No authentication, uploads, LLM features, or deployment work is included.
