@@ -11,6 +11,7 @@ from ..db import get_db
 from ..queries.articles import article_exists
 from ..queries.articles import insert_article
 from ..queries.articles import insert_article_version
+from ..queries.articles import list_all_articles_with_snapshots
 from ..queries.articles import list_article_snapshots
 from ..queries.articles import list_published_articles
 from ..queries.articles import set_current_snapshot
@@ -58,6 +59,36 @@ def list_articles():
             for article in articles
         ]
     )
+
+
+@articles_bp.get("/article/all")
+def list_all_articles():
+    rows = list_all_articles_with_snapshots(get_db())
+    articles = {}
+
+    for row in rows:
+        article = articles.setdefault(
+            row["id"],
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "slug": row["slug"],
+                "state_id": row["state_id"],
+                "creation_date": row["creation_date"],
+                "snapshots": [],
+            },
+        )
+        if row["snapshot_id"] is not None:
+            article["snapshots"].append(
+                {
+                    "id": row["snapshot_id"],
+                    "version_number": row["version_number"],
+                    "content": row["snapshot_content"],
+                    "creation_date": row["snapshot_creation_date"],
+                }
+            )
+
+    return jsonify(list(articles.values()))
 
 
 @articles_bp.get("/article/<article_id>")
