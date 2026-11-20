@@ -8,8 +8,10 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 
 from ..db import get_db
+from ..queries.articles import article_exists
 from ..queries.articles import insert_article
 from ..queries.articles import insert_article_version
+from ..queries.articles import list_article_snapshots
 from ..queries.articles import list_published_articles
 from ..queries.articles import set_current_snapshot
 from ..queries.articles import slug_exists
@@ -54,6 +56,26 @@ def list_articles():
                 "slug": article["slug"],
             }
             for article in articles
+        ]
+    )
+
+
+@articles_bp.get("/article/<article_id>")
+def get_article_snapshots(article_id: str):
+    db = get_db()
+    if not article_exists(db, article_id):
+        return jsonify({"error": "Article not found."}), 404
+
+    snapshots = list_article_snapshots(db, article_id)
+    return jsonify(
+        [
+            {
+                "id": snapshot["id"],
+                "version_number": snapshot["version_number"],
+                "content": snapshot["content"],
+                "creation_date": snapshot["creation_date"],
+            }
+            for snapshot in snapshots
         ]
     )
 
