@@ -9,6 +9,8 @@ from flask import Blueprint, jsonify, request
 
 from ..db import get_db
 from ..queries.articles import article_exists
+from ..queries.articles import delete_snapshot
+from ..queries.articles import get_snapshot_delete_info
 from ..queries.articles import insert_article
 from ..queries.articles import insert_article_version
 from ..queries.articles import list_all_articles_with_snapshots
@@ -123,6 +125,25 @@ def unpublish(article_id: str):
             return jsonify({"error": "Only published articles can be unpublished."}), 400
 
     return jsonify({"id": article_id, "state_id": 3})
+
+
+@articles_bp.delete("/article/snapshot/<snapshot_id>")
+def delete_article_snapshot(snapshot_id: str):
+    db = get_db()
+    snapshot = get_snapshot_delete_info(db, snapshot_id)
+    if snapshot is None:
+        return jsonify({"error": "Snapshot not found."}), 404
+
+    if snapshot["version_number"] == snapshot["latest_version_number"]:
+        return jsonify({"error": "The latest snapshot cannot be deleted."}), 400
+
+    if int(snapshot["state_id"]) == 2 and snapshot["current_snapshot_id"] == snapshot_id:
+        return jsonify({"error": "The current snapshot of a published article cannot be deleted."}), 400
+
+    with db:
+        delete_snapshot(db, snapshot_id, snapshot["article_id"])
+
+    return jsonify({"id": snapshot_id, "deleted": True})
 
 
 @articles_bp.post("/article")

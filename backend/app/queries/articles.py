@@ -56,6 +56,43 @@ def unpublish_article(db, article_id: str) -> bool:
     return cursor.rowcount == 1
 
 
+def get_snapshot_delete_info(db, snapshot_id: str):
+    return db.execute(
+        """
+        SELECT article_versions.id,
+               articles.id AS article_id,
+               articles.state_id,
+               articles.current_snapshot_id,
+               article_versions.version_number,
+               (
+                   SELECT MAX(version_number)
+                   FROM article_versions AS latest_versions
+                   WHERE latest_versions.article_id = article_versions.article_id
+               ) AS latest_version_number
+        FROM article_versions
+        INNER JOIN articles
+            ON articles.id = article_versions.article_id
+        WHERE article_versions.id = ?
+        """,
+        (snapshot_id,),
+    ).fetchone()
+
+
+def delete_snapshot(db, snapshot_id: str, article_id: str) -> None:
+    db.execute(
+        """
+        UPDATE articles
+        SET current_snapshot_id = NULL
+        WHERE id = ? AND current_snapshot_id = ?
+        """,
+        (article_id, snapshot_id),
+    )
+    db.execute(
+        "DELETE FROM article_versions WHERE id = ?",
+        (snapshot_id,),
+    )
+
+
 def list_article_snapshots(db, article_id: str):
     return db.execute(
         """

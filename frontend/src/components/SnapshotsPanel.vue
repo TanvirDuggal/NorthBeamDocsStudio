@@ -24,6 +24,7 @@ const expandedArticle = ref<string | null>(null)
 const expandedSnapshot = ref<string | null>(null)
 const isLoading = ref(true)
 const unpublishingArticleId = ref<string | null>(null)
+const deletingSnapshotId = ref<string | null>(null)
 const errorMessage = ref('')
 
 function stateName(stateId: number) {
@@ -61,6 +62,31 @@ async function unpublishArticle(article: Article) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
   } finally {
     unpublishingArticleId.value = null
+  }
+}
+
+async function deleteSnapshot(article: Article, snapshot: Snapshot) {
+  errorMessage.value = ''
+  deletingSnapshotId.value = snapshot.id
+
+  try {
+    const response = await fetch(`/api/writer/article/snapshot/${snapshot.id}`, {
+      method: 'DELETE',
+    })
+    const data = await response.json() as { error?: string }
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Unable to delete snapshot.')
+    }
+
+    article.snapshots = article.snapshots.filter((item) => item.id !== snapshot.id)
+    if (expandedSnapshot.value === snapshot.id) {
+      expandedSnapshot.value = null
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
+  } finally {
+    deletingSnapshotId.value = null
   }
 }
 
@@ -143,6 +169,15 @@ onMounted(loadArticles)
             <div class="snapshot-summary">
               <span>Version {{ snapshot.version_number }}</span>
               <span class="snapshot-date">{{ snapshot.creation_date }}</span>
+              <button
+                v-if="article.state_id !== 2 && article.snapshots[0]?.id !== snapshot.id"
+                class="delete-button"
+                type="button"
+                :disabled="deletingSnapshotId === snapshot.id"
+                @click.stop="deleteSnapshot(article, snapshot)"
+              >
+                {{ deletingSnapshotId === snapshot.id ? 'Deleting...' : 'Delete' }}
+              </button>
               <span class="expand-icon">{{ expandedSnapshot === snapshot.id ? '−' : '+' }}</span>
             </div>
             <div
@@ -176,8 +211,11 @@ h3 { margin: 0 0 6px; font-size: 18px; }
 .snapshot-list { display: grid; gap: 8px; border-top: 1px solid #edf0f3; padding: 14px 20px 20px; }
 .snapshot-card { border: 1px solid #e5eaee; border-radius: 8px; cursor: pointer; }
 .snapshot-card:hover, .snapshot-card.expanded { border-color: #9cb4c8; }
-.snapshot-summary { display: grid; grid-template-columns: 1fr auto 24px; align-items: center; gap: 14px; padding: 12px 14px; color: #35536d; font-size: 14px; font-weight: 700; }
+.snapshot-summary { display: grid; grid-template-columns: 1fr auto auto 24px; align-items: center; gap: 14px; padding: 12px 14px; color: #35536d; font-size: 14px; font-weight: 700; }
 .snapshot-date { color: #748492; font-size: 12px; font-weight: 400; }
+.delete-button { border: 1px solid #d7b8b8; border-radius: 6px; padding: 5px 8px; background: #fff; color: #9b4b4b; font-size: 11px; font-weight: 700; }
+.delete-button:hover { border-color: #a23d3d; background: #fff8f8; }
+.delete-button:disabled { cursor: wait; opacity: .65; }
 .snapshot-content { margin: 0 14px 14px; border-top: 1px solid #edf0f3; padding-top: 14px; color: #344653; line-height: 1.65; }
 .snapshot-content :deep(p) { margin: 0 0 12px; }
 .snapshot-content :deep(p:last-child) { margin-bottom: 0; }
@@ -187,5 +225,5 @@ h3 { margin: 0 0 6px; font-size: 18px; }
 .empty-snapshots, .status { color: #687582; font-size: 14px; }
 .empty-snapshots { margin: 0; }
 .status.error { color: #a23d3d; }
-@media (max-width: 650px) { .snapshots-panel { padding: 22px; } .snapshot-summary { grid-template-columns: 1fr 24px; } .snapshot-date { display: none; } }
+@media (max-width: 650px) { .snapshots-panel { padding: 22px; } .snapshot-summary { grid-template-columns: 1fr auto 24px; } .snapshot-date { display: none; } }
 </style>
