@@ -44,6 +44,18 @@ def article_exists(db, article_id: str) -> bool:
     ).fetchone() is not None
 
 
+def unpublish_article(db, article_id: str) -> bool:
+    cursor = db.execute(
+        """
+        UPDATE articles
+        SET state_id = 3
+        WHERE id = ? AND state_id = 2
+        """,
+        (article_id,),
+    )
+    return cursor.rowcount == 1
+
+
 def list_article_snapshots(db, article_id: str):
     return db.execute(
         """

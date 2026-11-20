@@ -23,6 +23,7 @@ const articles = ref<Article[]>([])
 const expandedArticle = ref<string | null>(null)
 const expandedSnapshot = ref<string | null>(null)
 const isLoading = ref(true)
+const unpublishingArticleId = ref<string | null>(null)
 const errorMessage = ref('')
 
 function stateName(stateId: number) {
@@ -39,6 +40,28 @@ function toggleArticle(articleId: string) {
 
 function toggleSnapshot(snapshotId: string) {
   expandedSnapshot.value = expandedSnapshot.value === snapshotId ? null : snapshotId
+}
+
+async function unpublishArticle(article: Article) {
+  errorMessage.value = ''
+  unpublishingArticleId.value = article.id
+
+  try {
+    const response = await fetch(`/api/writer/article/${article.id}/unpublish`, {
+      method: 'POST',
+    })
+    const data = await response.json() as { state_id?: number; error?: string }
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Unable to unpublish article.')
+    }
+
+    article.state_id = data.state_id ?? 3
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
+  } finally {
+    unpublishingArticleId.value = null
+  }
 }
 
 async function loadArticles() {
@@ -89,7 +112,18 @@ onMounted(loadArticles)
             <h3>{{ article.title }}</h3>
             <p>{{ article.slug }} · {{ stateName(article.state_id) }} · {{ article.creation_date }}</p>
           </div>
-          <span class="expand-icon">{{ expandedArticle === article.id ? '−' : '+' }}</span>
+          <div class="article-actions">
+            <button
+              v-if="article.state_id === 2"
+              class="unpublish-button"
+              type="button"
+              :disabled="unpublishingArticleId === article.id"
+              @click.stop="unpublishArticle(article)"
+            >
+              {{ unpublishingArticleId === article.id ? 'Unpublishing...' : 'Unpublish' }}
+            </button>
+            <span class="expand-icon">{{ expandedArticle === article.id ? '−' : '+' }}</span>
+          </div>
         </div>
 
         <div v-if="expandedArticle === article.id" class="snapshot-list">
@@ -134,6 +168,10 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
 .article-summary:hover, .article-card:has(.snapshot-list) { border-color: #9cb4c8; }
 h3 { margin: 0 0 6px; font-size: 18px; }
 .article-summary p { margin: 0; color: #748492; font-size: 13px; }
+.article-actions { display: flex; align-items: center; gap: 14px; }
+.unpublish-button { border: 1px solid #d7b8b8; border-radius: 7px; padding: 7px 10px; background: #fff; color: #9b4b4b; font-size: 12px; font-weight: 700; }
+.unpublish-button:hover { border-color: #a23d3d; background: #fff8f8; }
+.unpublish-button:disabled { cursor: wait; opacity: .65; }
 .expand-icon { color: #55728a; font-size: 22px; font-weight: 400; }
 .snapshot-list { display: grid; gap: 8px; border-top: 1px solid #edf0f3; padding: 14px 20px 20px; }
 .snapshot-card { border: 1px solid #e5eaee; border-radius: 8px; cursor: pointer; }

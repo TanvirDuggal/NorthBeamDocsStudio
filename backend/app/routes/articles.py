@@ -16,6 +16,7 @@ from ..queries.articles import list_article_snapshots
 from ..queries.articles import list_published_articles
 from ..queries.articles import set_current_snapshot
 from ..queries.articles import slug_exists
+from ..queries.articles import unpublish_article
 
 
 articles_bp = Blueprint("articles", __name__, url_prefix="/api/writer")
@@ -109,6 +110,19 @@ def get_article_snapshots(article_id: str):
             for snapshot in snapshots
         ]
     )
+
+
+@articles_bp.post("/article/<article_id>/unpublish")
+def unpublish(article_id: str):
+    db = get_db()
+    if not article_exists(db, article_id):
+        return jsonify({"error": "Article not found."}), 404
+
+    with db:
+        if not unpublish_article(db, article_id):
+            return jsonify({"error": "Only published articles can be unpublished."}), 400
+
+    return jsonify({"id": article_id, "state_id": 3})
 
 
 @articles_bp.post("/article")
