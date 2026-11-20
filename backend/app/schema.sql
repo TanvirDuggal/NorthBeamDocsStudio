@@ -33,3 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_article_versions_article_id
 
 CREATE INDEX IF NOT EXISTS idx_articles_state_id
     ON articles (state_id);
+
+-- Static article states.
+INSERT OR IGNORE INTO states (id, name) VALUES
+    (1, 'Draft'),
+    (2, 'Published'),
+    (3, 'UnPublished');

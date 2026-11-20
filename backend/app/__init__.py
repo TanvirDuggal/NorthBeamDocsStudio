@@ -7,6 +7,7 @@ from flask import Flask
 from .db import init_app as init_db_app
 from .db import init_db
 from .routes.health import health_bp
+from .routes.articles import articles_bp
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -20,6 +21,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     init_db_app(app)
     app.register_blueprint(health_bp)
+    app.register_blueprint(articles_bp)
 
     with app.app_context():
         init_db()
