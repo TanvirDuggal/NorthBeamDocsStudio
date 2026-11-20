@@ -11,13 +11,16 @@ from ..db import get_db
 from ..queries.articles import article_exists
 from ..queries.articles import delete_snapshot
 from ..queries.articles import get_snapshot_delete_info
+from ..queries.articles import get_article_for_publish
 from ..queries.articles import insert_article
 from ..queries.articles import insert_article_version
 from ..queries.articles import list_all_articles_with_snapshots
 from ..queries.articles import list_article_snapshots
 from ..queries.articles import list_published_articles
+from ..queries.articles import publish_article
 from ..queries.articles import set_current_snapshot
 from ..queries.articles import slug_exists
+from ..queries.articles import update_article_content
 from ..queries.articles import unpublish_article
 
 
@@ -127,6 +130,68 @@ def unpublish(article_id: str):
     return jsonify({"id": article_id, "state_id": 3})
 
 
+@articles_bp.patch("/article/<article_id>")
+def update_article(article_id: str):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("content"), str):
+        return jsonify({"error": "content is required and must be a string."}), 400
+
+    db = get_db()
+    article = get_article_for_publish(db, article_id)
+    if article is None:
+        return jsonify({"error": "Article not found."}), 404
+    if int(article["state_id"]) == 2:
+        return jsonify({"error": "Published articles must be unpublished before editing."}), 400
+
+    with db:
+        update_article_content(db, article_id, payload["content"])
+
+    return jsonify(
+        {
+            "id": article_id,
+            "title": article["title"],
+            "slug": article["slug"],
+            "state_id": int(article["state_id"]),
+            "content": payload["content"],
+        }
+    )
+
+
+@articles_bp.post("/article/<article_id>/publish")
+def publish_existing_article(article_id: str):
+    db = get_db()
+    article = get_article_for_publish(db, article_id)
+    if article is None:
+        return jsonify({"error": "Article not found."}), 404
+    if int(article["state_id"]) == 2:
+        return jsonify({"error": "Article is already published."}), 400
+
+    version_id = str(uuid4())
+    published_at = _utc_now()
+    version_number = int(article["latest_version_number"]) + 1
+
+    with db:
+        publish_article(
+            db,
+            article_id,
+            version_id,
+            version_number,
+            article["draft_content"],
+            published_at,
+        )
+
+    return jsonify(
+        {
+            "id": article_id,
+            "title": article["title"],
+            "slug": article["slug"],
+            "state_id": 2,
+            "version_id": version_id,
+            "version_number": version_number,
+        }
+    )
+
+
 @articles_bp.delete("/article/snapshot/<snapshot_id>")
 def delete_article_snapshot(snapshot_id: str):
     db = get_db()
@@ -144,6 +209,59 @@ def delete_article_snapshot(snapshot_id: str):
         delete_snapshot(db, snapshot_id, snapshot["article_id"])
 
     return jsonify({"id": snapshot_id, "deleted": True})
+
+
+@articles_bp.post("/article/replace")
+def replace_published_article():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+
+    previous_article_id = payload.get("previous_article_id")
+    title = payload.get("title")
+    content = payload.get("content")
+    if not isinstance(previous_article_id, str) or not previous_article_id:
+        return jsonify({"error": "previous_article_id is required."}), 400
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({"error": "title is required."}), 400
+    if not isinstance(content, str):
+        return jsonify({"error": "content must be a string."}), 400
+
+    db = get_db()
+    previous_article = get_article_for_publish(db, previous_article_id)
+    if previous_article is None:
+        return jsonify({"error": "Previous article not found."}), 404
+    if int(previous_article["state_id"]) != 2:
+        return jsonify({"error": "Previous article must be published."}), 400
+
+    slug = _unique_slug(db, _make_slug(title.strip()))
+    if not slug:
+        return jsonify({"error": "title must contain letters or numbers."}), 400
+
+    article_id = str(uuid4())
+    version_id = str(uuid4())
+    created_at = _utc_now()
+
+    with db:
+        unpublish_article(db, previous_article_id)
+        insert_article(
+            db, article_id, title.strip(), 2, slug, created_at, content
+        )
+        insert_article_version(
+            db, version_id, article_id, 1, content, created_at
+        )
+        set_current_snapshot(db, article_id, version_id)
+
+    return jsonify(
+        {
+            "id": article_id,
+            "title": title.strip(),
+            "slug": slug,
+            "state_id": 2,
+            "version_id": version_id,
+            "previous_article_id": previous_article_id,
+        }
+    ), 201
 
 
 @articles_bp.post("/article")
@@ -174,13 +292,13 @@ def create_article():
 
     with db:
         insert_article(
-            db, article_id, title.strip(), state_id, slug, created_at
+            db, article_id, title.strip(), state_id, slug, created_at, content
         )
 
         if state_id == 2:
             version_id = str(uuid4())
             insert_article_version(
-                db, version_id, article_id, content, created_at
+                db, version_id, article_id, 1, content, created_at
             )
             set_current_snapshot(db, article_id, version_id)
 

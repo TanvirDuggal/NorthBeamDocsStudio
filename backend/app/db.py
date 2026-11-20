@@ -30,6 +30,13 @@ def init_db() -> None:
     db = get_db()
     schema_path = Path(__file__).with_name("schema.sql")
     db.executescript(schema_path.read_text(encoding="utf-8"))
+    article_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(articles)").fetchall()
+    }
+    if "draft_content" not in article_columns:
+        db.execute(
+            "ALTER TABLE articles ADD COLUMN draft_content TEXT NOT NULL DEFAULT ''"
+        )
     db.commit()
 
 

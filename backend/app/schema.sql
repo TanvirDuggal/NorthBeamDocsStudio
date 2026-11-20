@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS articles (
     slug TEXT NOT NULL UNIQUE,
     current_snapshot_id TEXT,
     creation_date TEXT NOT NULL,
+    draft_content TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (state_id) REFERENCES states (id),
     FOREIGN KEY (current_snapshot_id) REFERENCES article_versions (id)
 );

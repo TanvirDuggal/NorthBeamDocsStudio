@@ -22,10 +22,15 @@ interface Article {
 const articles = ref<Article[]>([])
 const expandedArticle = ref<string | null>(null)
 const expandedSnapshot = ref<string | null>(null)
+const selectedSnapshotId = ref<string | null>(null)
+const editorContent = ref('')
 const isLoading = ref(true)
 const unpublishingArticleId = ref<string | null>(null)
 const deletingSnapshotId = ref<string | null>(null)
+const savingArticleId = ref<string | null>(null)
+const publishingArticleId = ref<string | null>(null)
 const errorMessage = ref('')
+const successMessage = ref('')
 
 function stateName(stateId: number) {
   return { 1: 'Draft', 2: 'Published', 3: 'UnPublished' }[stateId] ?? 'Unknown'
@@ -39,8 +44,11 @@ function toggleArticle(articleId: string) {
   expandedArticle.value = expandedArticle.value === articleId ? null : articleId
 }
 
-function toggleSnapshot(snapshotId: string) {
-  expandedSnapshot.value = expandedSnapshot.value === snapshotId ? null : snapshotId
+function toggleSnapshot(snapshot: Snapshot) {
+  selectedSnapshotId.value = snapshot.id
+  editorContent.value = snapshot.content
+  successMessage.value = ''
+  expandedSnapshot.value = expandedSnapshot.value === snapshot.id ? null : snapshot.id
 }
 
 async function unpublishArticle(article: Article) {
@@ -90,6 +98,68 @@ async function deleteSnapshot(article: Article, snapshot: Snapshot) {
   }
 }
 
+async function saveArticleEdit(article: Article) {
+  errorMessage.value = ''
+  successMessage.value = ''
+  savingArticleId.value = article.id
+
+  try {
+    const response = await fetch(`/api/writer/article/${article.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editorContent.value }),
+    })
+    const data = await response.json() as { error?: string }
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Unable to save article changes.')
+    }
+
+    successMessage.value = 'Article changes saved.'
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
+  } finally {
+    savingArticleId.value = null
+  }
+}
+
+async function publishArticle(article: Article) {
+  errorMessage.value = ''
+  successMessage.value = ''
+  publishingArticleId.value = article.id
+
+  try {
+    const saveResponse = await fetch(`/api/writer/article/${article.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editorContent.value }),
+    })
+    const saveData = await saveResponse.json() as { error?: string }
+    if (!saveResponse.ok) {
+      throw new Error(saveData.error ?? 'Unable to save article changes.')
+    }
+
+    const response = await fetch(`/api/writer/article/${article.id}/publish`, {
+      method: 'POST',
+    })
+    const data = await response.json() as { error?: string }
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Unable to publish article.')
+    }
+
+    successMessage.value = 'Article published as a new snapshot.'
+    selectedSnapshotId.value = null
+    expandedSnapshot.value = null
+    editorContent.value = ''
+    await loadArticles()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
+  } finally {
+    publishingArticleId.value = null
+  }
+}
+
 async function loadArticles() {
   isLoading.value = true
   errorMessage.value = ''
@@ -123,6 +193,7 @@ onMounted(loadArticles)
     <p v-if="isLoading" class="status">Loading articles...</p>
     <p v-else-if="errorMessage" class="status error">{{ errorMessage }}</p>
     <p v-else-if="articles.length === 0" class="status">No articles yet.</p>
+    <p v-if="successMessage" class="status success">{{ successMessage }}</p>
 
     <div v-else class="article-list">
       <div v-for="article in articles" :key="article.id" class="article-card">
@@ -162,15 +233,15 @@ onMounted(loadArticles)
             :class="{ expanded: expandedSnapshot === snapshot.id }"
             role="button"
             tabindex="0"
-            @click="toggleSnapshot(snapshot.id)"
-            @keydown.enter="toggleSnapshot(snapshot.id)"
-            @keydown.space.prevent="toggleSnapshot(snapshot.id)"
+            @click="toggleSnapshot(snapshot)"
+            @keydown.enter="toggleSnapshot(snapshot)"
+            @keydown.space.prevent="toggleSnapshot(snapshot)"
           >
             <div class="snapshot-summary">
               <span>Version {{ snapshot.version_number }}</span>
               <span class="snapshot-date">{{ snapshot.creation_date }}</span>
               <button
-                v-if="article.state_id !== 2 && article.snapshots[0]?.id !== snapshot.id"
+                v-if="article.snapshots[0]?.id !== snapshot.id"
                 class="delete-button"
                 type="button"
                 :disabled="deletingSnapshotId === snapshot.id"
@@ -185,6 +256,40 @@ onMounted(loadArticles)
               class="snapshot-content"
               v-html="renderContent(snapshot.content)"
             />
+            <div
+              v-if="selectedSnapshotId === snapshot.id && article.state_id !== 2"
+              class="snapshot-editor"
+              @click.stop
+            >
+              <label :for="`edit-${snapshot.id}`">Edit content</label>
+              <textarea
+                :id="`edit-${snapshot.id}`"
+                v-model="editorContent"
+                rows="10"
+                @click.stop
+              />
+              <div class="editor-actions">
+                <button
+                  class="save-button"
+                  type="button"
+                  :disabled="savingArticleId === article.id || publishingArticleId === article.id"
+                  @click="saveArticleEdit(article)"
+                >
+                  {{ savingArticleId === article.id ? 'Saving...' : 'Save Changes' }}
+                </button>
+                <button
+                  class="publish-button"
+                  type="button"
+                  :disabled="savingArticleId === article.id || publishingArticleId === article.id"
+                  @click="publishArticle(article)"
+                >
+                  {{ publishingArticleId === article.id ? 'Publishing...' : 'Publish' }}
+                </button>
+              </div>
+            </div>
+            <p v-if="selectedSnapshotId === snapshot.id && article.state_id === 2" class="edit-hint">
+              Unpublish this article to edit and publish a new snapshot.
+            </p>
           </div>
         </div>
       </div>
@@ -222,8 +327,19 @@ h3 { margin: 0 0 6px; font-size: 18px; }
 .snapshot-content :deep(h1), .snapshot-content :deep(h2), .snapshot-content :deep(h3) { margin: 0 0 12px; color: #18212b; line-height: 1.25; }
 .snapshot-content :deep(ul), .snapshot-content :deep(ol) { padding-left: 24px; }
 .snapshot-content :deep(code) { border-radius: 4px; padding: 2px 5px; background: #f0f3f6; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.snapshot-editor { border-top: 1px solid #edf0f3; padding: 14px; }
+.snapshot-editor label { display: block; margin-bottom: 8px; color: #3e4e5c; font-size: 13px; font-weight: 700; }
+.snapshot-editor textarea { display: block; width: 100%; resize: vertical; border: 1px solid #d4dde5; border-radius: 7px; padding: 10px; outline: none; color: #18212b; font: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.5; }
+.snapshot-editor textarea:focus { border-color: #7597b5; box-shadow: 0 0 0 3px rgb(117 151 181 / 15%); }
+.editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.save-button, .publish-button { border: 1px solid transparent; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 700; }
+.save-button { border-color: #c9d5df; background: #fff; color: #35536d; }
+.publish-button { background: #294b67; color: #fff; }
+.save-button:disabled, .publish-button:disabled { cursor: wait; opacity: .65; }
+.edit-hint { margin: 0; border-top: 1px solid #edf0f3; padding: 12px 14px 0; color: #748492; font-size: 13px; }
 .empty-snapshots, .status { color: #687582; font-size: 14px; }
 .empty-snapshots { margin: 0; }
 .status.error { color: #a23d3d; }
+.status.success { color: #267052; }
 @media (max-width: 650px) { .snapshots-panel { padding: 22px; } .snapshot-summary { grid-template-columns: 1fr auto 24px; } .snapshot-date { display: none; } }
 </style>
