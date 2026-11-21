@@ -90,6 +90,7 @@ def list_all_articles():
                 "state_id": row["state_id"],
                 "creation_date": row["creation_date"],
                 "tags": row["tags"],
+                "draft_content": row["draft_content"],
                 "snapshots": [],
             },
         )

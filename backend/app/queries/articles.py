@@ -26,6 +26,7 @@ def list_all_articles_with_snapshots(db):
                CAST(articles.state_id AS INTEGER) AS state_id,
                articles.creation_date,
                articles.tags,
+               articles.draft_content,
                article_versions.id AS snapshot_id,
                article_versions.version_number,
                article_versions.content AS snapshot_content,

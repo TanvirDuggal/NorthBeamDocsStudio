@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 interface Snapshot { id: string; version_number: number; content: string; creation_date: string }
-interface Article { id: string; title: string; slug: string; state_id: number; creation_date: string; tags: string; snapshots: Snapshot[] }
+interface Article { id: string; title: string; slug: string; state_id: number; creation_date: string; tags: string; draft_content: string; snapshots: Snapshot[] }
 
 const articles = ref<Article[]>([])
 const expandedArticle = ref<string | null>(null)
@@ -26,7 +26,7 @@ const successMessage = ref('')
 function stateName(stateId: number) { return { 1: 'Draft', 2: 'Published', 3: 'UnPublished' }[stateId] ?? 'Unknown' }
 function renderContent(content: string) { return DOMPurify.sanitize(marked.parse(content, { async: false })) }
 function toggleArticle(articleId: string) { expandedArticle.value = expandedArticle.value === articleId ? null : articleId }
-function openUpdateModal(article: Article) { editingArticle.value = article; updateContent.value = article.snapshots[0]?.content ?? ''; updateTags.value = article.tags; errorMessage.value = '' }
+function openUpdateModal(article: Article) { editingArticle.value = article; updateContent.value = article.draft_content || article.snapshots[0]?.content || ''; updateTags.value = article.tags; errorMessage.value = '' }
 function closeUpdateModal() { if (updatingArticleId.value === null) { editingArticle.value = null; updateContent.value = ''; updateTags.value = '' } }
 function toggleSnapshot(snapshot: Snapshot) { selectedSnapshotId.value = snapshot.id; editorContent.value = snapshot.content; successMessage.value = ''; expandedSnapshot.value = expandedSnapshot.value === snapshot.id ? null : snapshot.id }
 
