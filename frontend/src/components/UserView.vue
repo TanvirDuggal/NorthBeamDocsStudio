@@ -8,6 +8,7 @@ interface Article {
   content: string
   creation_date: string
   slug: string
+  tags: string
 }
 
 defineEmits<{ goHome: [] }>()
@@ -75,7 +76,7 @@ onMounted(loadArticles)
         <div class="article-summary">
           <div>
             <h2>{{ article.title }}</h2>
-            <p class="article-meta">{{ article.slug }} · {{ article.creation_date }}</p>
+            <p class="article-meta">{{ article.slug }} · {{ article.creation_date }}<span v-if="article.tags"> · {{ article.tags }}</span></p>
           </div>
           <span class="expand-icon">{{ expandedSlug === article.slug ? '−' : '+' }}</span>
         </div>

@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 interface Snapshot { id: string; version_number: number; content: string; creation_date: string }
-interface Article { id: string; title: string; slug: string; state_id: number; creation_date: string; snapshots: Snapshot[] }
+interface Article { id: string; title: string; slug: string; state_id: number; creation_date: string; tags: string; snapshots: Snapshot[] }
 
 const articles = ref<Article[]>([])
 const expandedArticle = ref<string | null>(null)
@@ -19,14 +19,15 @@ const publishingArticleId = ref<string | null>(null)
 const updatingArticleId = ref<string | null>(null)
 const editingArticle = ref<Article | null>(null)
 const updateContent = ref('')
+const updateTags = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 
 function stateName(stateId: number) { return { 1: 'Draft', 2: 'Published', 3: 'UnPublished' }[stateId] ?? 'Unknown' }
 function renderContent(content: string) { return DOMPurify.sanitize(marked.parse(content, { async: false })) }
 function toggleArticle(articleId: string) { expandedArticle.value = expandedArticle.value === articleId ? null : articleId }
-function openUpdateModal(article: Article) { editingArticle.value = article; updateContent.value = article.snapshots[0]?.content ?? ''; errorMessage.value = '' }
-function closeUpdateModal() { if (updatingArticleId.value === null) { editingArticle.value = null; updateContent.value = '' } }
+function openUpdateModal(article: Article) { editingArticle.value = article; updateContent.value = article.snapshots[0]?.content ?? ''; updateTags.value = article.tags; errorMessage.value = '' }
+function closeUpdateModal() { if (updatingArticleId.value === null) { editingArticle.value = null; updateContent.value = ''; updateTags.value = '' } }
 function toggleSnapshot(snapshot: Snapshot) { selectedSnapshotId.value = snapshot.id; editorContent.value = snapshot.content; successMessage.value = ''; expandedSnapshot.value = expandedSnapshot.value === snapshot.id ? null : snapshot.id }
 
 async function unpublishArticle(article: Article) {
@@ -89,13 +90,13 @@ async function publishUpdate() {
       if (!response.ok) throw new Error(data.error ?? 'Unable to unpublish article.')
       article.state_id = data.state_id ?? 3
     }
-    const updateResponse = await fetch(`/api/writer/article/${article.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: updateContent.value }) })
+    const updateResponse = await fetch(`/api/writer/article/${article.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: updateContent.value, tags: updateTags.value }) })
     const updateData = await updateResponse.json() as { error?: string }
     if (!updateResponse.ok) throw new Error(updateData.error ?? 'Unable to save article changes.')
     const publishResponse = await fetch(`/api/writer/article/${article.id}/publish`, { method: 'POST' })
     const publishData = await publishResponse.json() as { error?: string }
     if (!publishResponse.ok) throw new Error(publishData.error ?? 'Unable to publish article.')
-    editingArticle.value = null; updateContent.value = ''; successMessage.value = 'Article updated and published as a new snapshot.'
+    editingArticle.value = null; updateContent.value = ''; updateTags.value = ''; successMessage.value = 'Article updated and published as a new snapshot.'
     await loadArticles()
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.' }
   finally { updatingArticleId.value = null }
@@ -156,6 +157,7 @@ onMounted(loadArticles)
     <div v-if="editingArticle" class="modal-backdrop" @click.self="closeUpdateModal">
       <section class="update-modal" role="dialog" aria-modal="true" aria-labelledby="update-title">
         <div class="modal-heading"><div><p class="eyebrow">Update article</p><h2 id="update-title">{{ editingArticle.title }}</h2></div><button class="close-button" type="button" :disabled="updatingArticleId !== null" @click="closeUpdateModal">×</button></div>
+        <label for="update-tags">Tags</label><input id="update-tags" v-model="updateTags" type="text" placeholder="be, fe, api" />
         <label for="update-content">New content</label><textarea id="update-content" v-model="updateContent" rows="14" />
         <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
         <div class="modal-actions"><button class="cancel-button" type="button" :disabled="updatingArticleId !== null" @click="closeUpdateModal">Cancel</button><button class="publish-button" type="button" :disabled="updatingArticleId !== null" @click="publishUpdate">{{ updatingArticleId !== null ? 'Publishing...' : 'Publish' }}</button></div>

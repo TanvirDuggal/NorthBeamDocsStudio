@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS articles (
     slug TEXT NOT NULL UNIQUE,
     current_snapshot_id TEXT,
     creation_date TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '',
     draft_content TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (state_id) REFERENCES states (id),
     FOREIGN KEY (current_snapshot_id) REFERENCES article_versions (id)
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS article_versions (
     version_number INTEGER NOT NULL,
     content TEXT NOT NULL,
     creation_date TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE,
     UNIQUE (article_id, version_number)
 );

@@ -37,6 +37,14 @@ def init_db() -> None:
         db.execute(
             "ALTER TABLE articles ADD COLUMN draft_content TEXT NOT NULL DEFAULT ''"
         )
+    if "tags" not in article_columns:
+        db.execute("ALTER TABLE articles ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+
+    version_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(article_versions)").fetchall()
+    }
+    if "tags" not in version_columns:
+        db.execute("ALTER TABLE article_versions ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
     db.commit()
 
 

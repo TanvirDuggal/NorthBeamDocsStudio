@@ -50,6 +50,14 @@ def _unique_slug(db, base_slug: str) -> str:
     return slug
 
 
+def _normalize_tags(value) -> str | None:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        return None
+    return ", ".join(tag.strip() for tag in value.split(",") if tag.strip())
+
+
 @articles_bp.get("/article")
 def list_articles():
     articles = list_published_articles(get_db())
@@ -60,6 +68,7 @@ def list_articles():
                 "content": article["content"],
                 "creation_date": article["creation_date"],
                 "slug": article["slug"],
+                "tags": article["tags"],
             }
             for article in articles
         ]
@@ -80,6 +89,7 @@ def list_all_articles():
                 "slug": row["slug"],
                 "state_id": row["state_id"],
                 "creation_date": row["creation_date"],
+                "tags": row["tags"],
                 "snapshots": [],
             },
         )
@@ -90,6 +100,7 @@ def list_all_articles():
                     "version_number": row["version_number"],
                     "content": row["snapshot_content"],
                     "creation_date": row["snapshot_creation_date"],
+                    "tags": row["snapshot_tags"],
                 }
             )
 
@@ -122,8 +133,12 @@ def update_article(article_id: str):
     if int(article["state_id"]) == 2:
         return jsonify({"error": "Published articles must be unpublished before editing."}), 400
 
+    tags = _normalize_tags(payload.get("tags", article["tags"]))
+    if tags is None:
+        return jsonify({"error": "tags must be a comma-separated string."}), 400
+
     with db:
-        update_article_content(db, article_id, payload["content"])
+        update_article_content(db, article_id, payload["content"], tags)
 
     return jsonify(
         {
@@ -132,6 +147,7 @@ def update_article(article_id: str):
             "slug": article["slug"],
             "state_id": int(article["state_id"]),
             "content": payload["content"],
+            "tags": tags,
         }
     )
 
@@ -157,6 +173,7 @@ def publish_existing_article(article_id: str):
             version_number,
             article["draft_content"],
             published_at,
+            article["tags"],
         )
 
     return jsonify(
@@ -167,6 +184,7 @@ def publish_existing_article(article_id: str):
             "state_id": 2,
             "version_id": version_id,
             "version_number": version_number,
+            "tags": article["tags"],
         }
     )
 
@@ -204,6 +222,9 @@ def create_article():
         return jsonify({"error": "title is required."}), 400
     if not isinstance(content, str):
         return jsonify({"error": "content must be a string."}), 400
+    tags = _normalize_tags(payload.get("tags"))
+    if tags is None:
+        return jsonify({"error": "tags must be a comma-separated string."}), 400
     if state_id not in (1, 2):
         return jsonify({"error": "state_id must be 1 (Draft) or 2 (Published)."}), 400
 
@@ -213,18 +234,25 @@ def create_article():
         return jsonify({"error": "title must contain letters or numbers."}), 400
 
     article_id = str(uuid4())
-    created_at = _utc_now()
+    creation_date = _utc_now()
     version_id = None
 
     with db:
         insert_article(
-            db, article_id, title.strip(), state_id, slug, created_at, content
+            db,
+            article_id,
+            title.strip(),
+            state_id,
+            slug,
+            creation_date,
+            tags,
+            content,
         )
 
         if state_id == 2:
             version_id = str(uuid4())
             insert_article_version(
-                db, version_id, article_id, 1, content, created_at
+                db, version_id, article_id, 1, content, creation_date, tags
             )
             set_current_snapshot(db, article_id, version_id)
 
@@ -234,7 +262,8 @@ def create_article():
             "title": title.strip(),
             "slug": slug,
             "state_id": state_id,
-            "creation_date": created_at,
+            "creation_date": creation_date,
             "version_id": version_id,
+            "tags": tags,
         }
     ), 201

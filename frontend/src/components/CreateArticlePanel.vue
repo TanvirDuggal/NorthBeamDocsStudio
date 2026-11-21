@@ -3,6 +3,7 @@ import { ref } from 'vue'
 
 interface ArticleResponse { slug: string }
 const title = ref('')
+const tags = ref('')
 const content = ref('')
 const isSaving = ref(false)
 const errorMessage = ref('')
@@ -17,12 +18,13 @@ async function createArticle(stateId: 1 | 2) {
     const response = await fetch('/api/writer/article', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title.value, content: content.value, state_id: stateId }),
+      body: JSON.stringify({ title: title.value, tags: tags.value, content: content.value, state_id: stateId }),
     })
     const data = await response.json() as ArticleResponse | { error?: string }
     if (!response.ok) throw new Error('error' in data && data.error ? data.error : 'Unable to create article.')
     successMessage.value = `Article created as ${stateId === 1 ? 'draft' : 'published'}: ${(data as ArticleResponse).slug}`
     title.value = ''
+    tags.value = ''
     content.value = ''
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the backend.'
@@ -39,6 +41,8 @@ async function createArticle(stateId: 1 | 2) {
     <form @submit.prevent>
       <label for="title">Title</label>
       <input id="title" v-model="title" type="text" placeholder="Article title" />
+      <label for="tags">Tags</label>
+      <input id="tags" v-model="tags" type="text" placeholder="be, fe, api" />
       <label for="content">Content</label>
       <textarea id="content" v-model="content" rows="14" placeholder="# Start writing..." />
       <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>

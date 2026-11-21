@@ -7,7 +7,8 @@ def list_published_articles(db):
         SELECT articles.title,
                article_versions.content,
                articles.creation_date,
-               articles.slug
+               articles.slug,
+               articles.tags
         FROM articles
         INNER JOIN article_versions
             ON article_versions.id = articles.current_snapshot_id
@@ -24,10 +25,12 @@ def list_all_articles_with_snapshots(db):
                articles.slug,
                CAST(articles.state_id AS INTEGER) AS state_id,
                articles.creation_date,
+               articles.tags,
                article_versions.id AS snapshot_id,
                article_versions.version_number,
                article_versions.content AS snapshot_content,
-               article_versions.creation_date AS snapshot_creation_date
+               article_versions.creation_date AS snapshot_creation_date,
+               article_versions.tags AS snapshot_tags
         FROM articles
         LEFT JOIN article_versions
             ON article_versions.article_id = articles.id
@@ -69,6 +72,7 @@ def get_article_for_publish(db, article_id: str):
                articles.slug,
                articles.state_id,
                articles.draft_content,
+               articles.tags,
                COALESCE(MAX(article_versions.version_number), 0) AS latest_version_number
         FROM articles
         LEFT JOIN article_versions
@@ -80,14 +84,14 @@ def get_article_for_publish(db, article_id: str):
     ).fetchone()
 
 
-def update_article_content(db, article_id: str, content: str) -> bool:
+def update_article_content(db, article_id: str, content: str, tags: str) -> bool:
     cursor = db.execute(
         """
         UPDATE articles
-        SET draft_content = ?
+        SET draft_content = ?, tags = ?
         WHERE id = ? AND state_id IN (1, 3)
         """,
-        (content, article_id),
+        (content, tags, article_id),
     )
     return cursor.rowcount == 1
 
@@ -99,24 +103,26 @@ def publish_article(
     version_number: int,
     content: str,
     creation_date: str,
+    tags: str,
 ) -> None:
     db.execute(
         """
         INSERT INTO article_versions
-            (id, article_id, version_number, content, creation_date)
-        VALUES (?, ?, ?, ?, ?)
+            (id, article_id, version_number, content, creation_date, tags)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (version_id, article_id, version_number, content, creation_date),
+        (version_id, article_id, version_number, content, creation_date, tags),
     )
     db.execute(
         """
         UPDATE articles
         SET state_id = 2,
             current_snapshot_id = ?,
-            draft_content = ?
+            draft_content = ?,
+            tags = ?
         WHERE id = ?
         """,
-        (version_id, content, article_id),
+        (version_id, content, tags, article_id),
     )
 
 
@@ -171,15 +177,16 @@ def insert_article(
     state_id: int,
     slug: str,
     creation_date: str,
+    tags: str,
     draft_content: str,
 ) -> None:
     db.execute(
         """
         INSERT INTO articles
-            (id, title, state_id, slug, current_snapshot_id, creation_date, draft_content)
-        VALUES (?, ?, ?, ?, NULL, ?, ?)
+            (id, title, state_id, slug, current_snapshot_id, creation_date, tags, draft_content)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
         """,
-        (article_id, title, state_id, slug, creation_date, draft_content),
+        (article_id, title, state_id, slug, creation_date, tags, draft_content),
     )
 
 
@@ -190,14 +197,15 @@ def insert_article_version(
     version_number: int,
     content: str,
     creation_date: str,
+    tags: str,
 ) -> None:
     db.execute(
         """
         INSERT INTO article_versions
-            (id, article_id, version_number, content, creation_date)
-        VALUES (?, ?, ?, ?, ?)
+            (id, article_id, version_number, content, creation_date, tags)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (version_id, article_id, version_number, content, creation_date),
+        (version_id, article_id, version_number, content, creation_date, tags),
     )
 
 
