@@ -157,18 +157,6 @@ def delete_snapshot(db, snapshot_id: str, article_id: str) -> None:
     )
 
 
-def list_article_snapshots(db, article_id: str):
-    return db.execute(
-        """
-        SELECT id, version_number, content, creation_date
-        FROM article_versions
-        WHERE article_id = ?
-        ORDER BY version_number DESC
-        """,
-        (article_id,),
-    ).fetchall()
-
-
 def slug_exists(db, slug: str) -> bool:
     return db.execute(
         "SELECT 1 FROM articles WHERE slug = ?",
