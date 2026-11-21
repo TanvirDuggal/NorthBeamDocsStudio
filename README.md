@@ -98,6 +98,26 @@ Publication status belongs to the article, not individual snapshots.
 Unpublishing hides the article publicly while preserving its last
 published snapshot reference.
 
+### Why This Database Structure?
+
+The schema separates article identity, version history, and publication
+states into three tables.
+
+- **articles:** Stores each article’s identity, editable draft, current
+  state, and reference to its published snapshot.
+- **article_versions:** Stores snapshots in a one-to-many relationship:
+  one article can have multiple snapshots, while each snapshot belongs
+  to exactly one article.
+- **states:** Defines the supported publication states in one place.
+  Articles reference this table through state_id to maintain consistent
+  state values.
+
+This structure avoids repeating article-level information in every
+snapshot. Each snapshot intentionally stores a complete copy of its
+versioned content so it can be viewed or restored independently.
+Separating drafts from snapshots also allows draft changes without
+modifying published content.
+
 ## API Reference
 
 Base URL:
@@ -126,6 +146,15 @@ Content-Type: application/json
 | DELETE | /api/writer/article/snapshot/{snapshotID} | Delete an eligible snapshot |
 
 articleID and snapshotID are backend-generated UUIDs.
+
+## Interactive API Documentation
+
+With the Flask backend running, open Swagger UI:
+
+http://127.0.0.1:5000/swagger/
+
+Swagger UI provides endpoint documentation, request schemas,
+and an interface for sending API requests and inspecting responses.
 
 ### Create Article
 

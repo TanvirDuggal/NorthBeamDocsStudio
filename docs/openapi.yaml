@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: NorthBeam Docs Studio API
+  version: 1.0.0
+  description: API for creating, publishing, editing, and versioning documentation articles.
+servers:
+  - url: http://127.0.0.1:5000
+tags:
+  - name: Health
+  - name: Articles
+  - name: Snapshots
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check backend health
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/writer/article:
+    post:
+      tags: [Articles]
+      summary: Create an article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateArticleRequest'
+      responses:
+        '201':
+          description: Article created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [Articles]
+      summary: List published articles
+      responses:
+        '200':
+          description: Published articles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublishedArticle'
+  /api/writer/article/all:
+    get:
+      tags: [Articles]
+      summary: List all articles with snapshots
+      responses:
+        '200':
+          description: All articles ordered newest first, with snapshots newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArticleWithSnapshots'
+  /api/writer/article/{articleID}:
+    parameters:
+      - $ref: '#/components/parameters/ArticleID'
+    patch:
+      tags: [Articles]
+      summary: Update draft content and tags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateArticleRequest'
+      responses:
+        '200':
+          description: Article updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/writer/article/{articleID}/publish:
+    parameters:
+      - $ref: '#/components/parameters/ArticleID'
+    post:
+      tags: [Articles]
+      summary: Publish an existing article
+      description: Creates the next immutable snapshot and marks the article Published.
+      responses:
+        '200':
+          description: Article published.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/writer/article/{articleID}/unpublish:
+    parameters:
+      - $ref: '#/components/parameters/ArticleID'
+    post:
+      tags: [Articles]
+      summary: Unpublish an article
+      responses:
+        '200':
+          description: Article unpublished.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/writer/article/snapshot/{snapshotID}:
+    parameters:
+      - $ref: '#/components/parameters/SnapshotID'
+    delete:
+      tags: [Snapshots]
+      summary: Delete an older snapshot
+      description: The latest snapshot cannot be deleted.
+      responses:
+        '200':
+          description: Snapshot deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    ArticleID:
+      name: articleID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SnapshotID:
+      name: snapshotID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateArticleRequest:
+      type: object
+      required: [title, content, state_id]
+      properties:
+        title:
+          type: string
+          example: My Article
+        content:
+          type: string
+          description: Markdown content. May be empty.
+          example: '# My Article'
+        tags:
+          type: string
+          description: Comma-separated tags.
+          example: be, fe, api
+        state_id:
+          type: integer
+          enum: [1, 2]
+          description: 1 Draft, 2 Published.
+    UpdateArticleRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Updated Markdown content.
+        tags:
+          type: string
+          description: Comma-separated tags.
+    ArticleCreated:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string}
+        slug: {type: string}
+        state_id: {type: integer}
+        creation_date: {type: string, format: date-time}
+        tags: {type: string}
+        version_id: {type: string, format: uuid, nullable: true}
+    PublishedArticle:
+      type: object
+      properties:
+        title: {type: string}
+        content: {type: string}
+        creation_date: {type: string, format: date-time}
+        slug: {type: string}
+        tags: {type: string}
+    Snapshot:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        version_number: {type: integer}
+        content: {type: string}
+        creation_date: {type: string, format: date-time}
+        tags: {type: string}
+    ArticleWithSnapshots:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string}
+        slug: {type: string}
+        state_id: {type: integer}
+        creation_date: {type: string, format: date-time}
+        tags: {type: string}
+        draft_content: {type: string}
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Snapshot'
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid request or state transition.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
